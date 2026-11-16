@@ -3,8 +3,11 @@
 特征选择与回归的真实业务分析小型项目。完整模拟客户、痛点、上下游、算法公式与一天工作剧本见 [BUSINESS.md](BUSINESS.md)。
 
 ## 模块与业务流程
-数据接入（JSON/CSV、字段验证、批次指纹）→ 参数化分析（异步 Python worker）→ 结果复核（指标、图形、明细、解释、批准）→ 定时分发（本地收件箱、CSV/JSON、SHA256）；另有业务总览和审计轨迹。
-三个贯穿全栈的实体：Dataset 数据批次、Job 分析任务、Report 分发计划；辅助 User、Audit、Delivery。
+数据接入（JSON/CSV、字段验证、批次指纹）→ 参数化分析（异步 Python worker）→ 结果复核（指标、图形、明细、解释、批准）→ 周期评审（按业务日历与线体清单建期、逐线归因、整期批准与分发）→ 定时分发（本地收件箱、CSV/JSON、SHA256）；另有业务总览和审计轨迹。
+贯穿全栈的实体：Dataset 数据批次、Job 分析任务、ReviewPlan/ReviewPeriod/ReviewBranch 周期评审、Report 分发计划；辅助 User、Audit、Delivery。
+
+### 周期评审
+负责人维护评审计划（应跑星期、节假日、应跑时刻、线体清单与固定参数）；worker 每轮按日历为到期应跑日建期，逐线复用分析算法计算，整期齐全后进入待批准，负责人批准后由 worker 生成整期简报归档。缺资料的线体为「待资料」并阻塞批准，补齐后自动入队；失败分支可单独重试；停机跨多个应跑日会按日历补建；多执行器并发以唯一约束和原子占用防重。日历与线体变更只影响未建期；停用后不再建期，已建期仍可收尾。页面在「周期评审」查看待资料、执行中、部分失败、待批准各状态的期次与各线依据。
 
 ## 快速启动
 ```bash
@@ -35,9 +38,10 @@ Role 枚举：admin/analyst/viewer；JobStatus：queued/running/completed/failed
 COMPOSE_PROJECT_NAME=energy-ridge；FRONTEND_PORT=18215；BACKEND_PORT=19215；DB_PORT=17715；DB_PASSWORD、JWT_SECRET 见 .env.example；SEED_DEMO 默认 true。共享命名产物卷供后端下载与 worker 写入，数据库/Redis 各持久卷。
 恰好五服务均有健康检查。Redis 队列加 SQL 排队状态兜底；worker 按 next_run 生成本地收件箱文件。周期 60 秒至 30 天。分发结果为批准分析的固定快照；若需新数据重新计算并建立新计划。当前不连接邮件或企业聊天。
 错误响应、请求编号、Redis 每 IP 每分钟 240 次限流、JWT 和数据库操作审计。演示密钥与密码仅供本机模拟；生产部署前配置独立密钥与账号。
+后端检查：在 `backend/` 执行 `python -m pytest tests`（临时 SQLite 与独立产物目录，无需 Redis/MySQL）。
 
 ## 数据与验收
-所有数据为固定随机种子生成的模拟业务数据，不能作为实际生产决策证据。项目独立算法、输入边界及业务局限详见 BUSINESS.md。测试与截图统一存放 ../../test-artifacts/gb-1016/，源码不含日志/截图/测试报告。
+所有数据为固定随机种子生成的模拟业务数据，不能作为实际生产决策证据。项目独立算法、输入边界及业务局限详见 BUSINESS.md。单元与契约检查位于 `backend/tests/` 与 `test-artifacts/gb-1016/`；真实容器、权限、主流程与截图的结果统一记录在对应 `TESTING.md`，未执行的检查不写成通过。源码不含日志/截图/测试报告。
 清理本项目演示数据：`docker compose down -v --remove-orphans`（会删除本项目命名卷）。
 
 ## License
